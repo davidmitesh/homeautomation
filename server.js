@@ -8,81 +8,29 @@ var io = require('socket.io')(http) //require socket.io module and pass the http
 var Gpio = require('onoff').Gpio; //include onoff to interact with the GPIO
 var LED = new Gpio(4, 'out'); //use GPIO pin 4 as output
 var pushButton = new Gpio(17, 'in', 'both'); //use GPIO pin 17 as input, and 'both' button presses, and releases should be handled
-
-const {MongoClient, ObjectID} = require('mongodb');
-
-
-const url = 'mongodb://localhost:27017/automation';
+var {addAutomation,updateFan,updateLight,getstatus,updateLightParameter}=require("./playground/playground.js");
 
 var app=express();
 app.use(bodyParser.json());
-var lightstatus=0;
-var fanstatus=1;
 
-app.use((req,res,next)=>{
-  MongoClient.connect(url, (err, db)=>{
-    var dbase=db.db("homeautomation");
-    dbase.collection('automation').findOne({
-      name:"mitesh"
-    },(err,data)=>{
-      lightstatus=data.light;
-      fanstatus=data.fan;
-    });
-});
-next();
-});
+
+
 app.get('/adddetail',(req,res)=>{
-  MongoClient.connect(url, (err, db)=>{
-    var dbase=db.db("homeautomation");
-        dbase.collection('automation').insertOne({
-          name:"mitesh",
-          light:0,
-          fan:0
-        },(err,result)=>{
-        if (err){
-         return  console.log('cannot be saved');
-        }
-          res.send("hey soul sister");
-        });
-db.close();
-});
+  addAutomation("mitesh",0,0);
 });
 
   app.get('/getstatus',(req,res)=>{
-    MongoClient.connect(url, (err, db)=>{
-      var dbase=db.db("homeautomation");
-    dbase.collection("automation").findOne({
-     name:"mitesh"
-   },(err,data)=>{
-     res.send(data);
-   });
-   db.close();
- }) ;
+    res.send(getstatus()[0]);
 });
 
   app.get('/togglelightstatus',(req,res)=>{
-    MongoClient.connect(url, (err, db)=>{
-      var dbase=db.db("homeautomation");
-    dbase.collection("automation").findOneAndUpdate({
-      name:"mitesh"
-    },{$set:{light:!lightstatus}},(err,data)=>{
-      console.log("toggled light");
-      res.send('data');
-    });
-    db.close();
-  });
+  updateLight();
+  res.send("done");
 });
 
   app.get('/togglefanstatus',(req,res)=>{
-    MongoClient.connect(url, (err, db)=>{
-      var dbase=db.db("homeautomation");
-    dbase.collection("automation").findOneAndUpdate({
-      name:"mitesh"
-    },{$set:{fan:!fanstatus}},(err,data)=>{
-      console.log("toggled fan");
-    });
-    db.close();
-  });
+  updateFan();
+  res.send("done");
 
 });
 
@@ -97,29 +45,24 @@ function handler (req, res) { //create server
     return res.end();
   });
 }
+  updateLightParameter(0);
 
 io.sockets.on('connection', function (socket) {// WebSocket Connection
-   lightstatus = 0; //static variable for current status
+  var lightvalue = 0; //static variable for current status
   pushButton.watch(function (err, value) { //Watch for hardware interrupts on pushButton
     if (err) { //if an error
       console.error('There was an error', err); //output error message to console
       return;
     }
-    lightstatus = value;
-MongoClient.connect(url, (err, db)=>{
-  var dbase=db.db("homeautomation");
-  dbase.collection('automation').findOneAndUpdate({
-    name:"mitesh"
-  },{$set:{light:lightstatus}},(err,data)=>{
-    console.log("succesfully updated");
-  });
-});
-    socket.emit('light', lightstatus); //send button status to client
+    lightvalue = value;
+    updateLightParameter(lightvalue);
+    socket.emit('light', lightvalue); //send button status to client
   });
   socket.on('light', function(data) { //get light switch status from client
-    lightstatus = data;
-    if (lightstatus != LED.readSync()) { //only change LED if status has changed
-      LED.writeSync(lightstatus); //turn LED on or off
+    lightvalue = data;
+      updateLightParameter(lightvalue);
+    if (lightvalue != LED.readSync()) { //only change LED if status has changed
+      LED.writeSync(lightvalue); //turn LED on or off
     }
   });
 });
